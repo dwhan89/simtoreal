@@ -21,3 +21,6 @@ notes/
 
 # OS
 .DS_Store
+
+# Agents
+.claude/

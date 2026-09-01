@@ -20,4 +20,6 @@ nuscenes-devkit for the real-data half.
 
 - Environment setup (Docker + uv, smoke test): [`docker/README.md`](docker/README.md)
 
+See [CHANGELOG.md](CHANGELOG.md) for project history.
+
 Licensed under [MIT](LICENSE).
