@@ -1,0 +1,54 @@
+# Cloud deployment: CARLA simulator + this repo's client/training image on one
+# network. Run from the repo root:
+#
+#   docker compose -f docker/docker-compose.yml up
+#
+# Requires the NVIDIA Container Toolkit on the host (for `gpus`/device
+# reservations to work) and the client image already built — see
+# docker/README.md for the buildx command. Uses GPU 0 for both services by
+# default; split CARLA_GPU/CLIENT_GPU if you have two GPUs and training gets
+# memory-hungry (see docker/README.md).
+services:
+  carla-sim:
+    image: carlasim/carla:0.9.16
+    command: ["./CarlaUE4.sh", "-RenderOffScreen"]
+    ports:
+      - "2000-2002:2000-2002"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${CARLA_GPU:-0}"]
+              capabilities: [gpu]
+
+  client:
+    image: dwhan89/simtoreal:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - carla-sim
+    environment:
+      CARLA_HOST: carla-sim
+      CARLA_PORT: "2000"
+    # Mounted at a subdirectory, not /workspace itself — the whole
+    # /workspace root holds the image's baked-in .venv and code, which an
+    # empty named volume would otherwise shadow on first mount.
+    volumes:
+      - workspace-data:/workspace/data
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${CLIENT_GPU:-0}"]
+              capabilities: [gpu]
+
+volumes:
+  # Persistent volume for checkpoints and downloaded nuScenes/KITTI data —
+  # survives a container restart (see docker/README.md "Attach a persistent
+  # volume").
+  workspace-data:

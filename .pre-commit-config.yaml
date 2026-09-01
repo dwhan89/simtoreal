@@ -1,0 +1,43 @@
+# Pre-commit hooks. Install once per clone:
+#
+#     uv sync                    # installs ruff + pre-commit from the dev group
+#     uv run pre-commit install  # writes .git/hooks/pre-commit
+#
+# Run against everything (not just staged files):
+#
+#     uv run pre-commit run --all-files
+#
+# The ruff hooks are `repo: local` on purpose: they call the ruff pinned in
+# pyproject.toml's dev group, so the hook, your editor, and CI all agree on one
+# version. All configuration (rule selection, per-file ignores, formatter
+# exclusions) lives in pyproject.toml under [tool.ruff] — not here.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+  # Cheap, high-value hygiene checks that catch things ruff does not.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^notes/syllabus\.html$
+      - id: end-of-file-fixer
+        exclude: ^notes/syllabus\.html$
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml

@@ -1,0 +1,73 @@
+[project]
+name = "sim-to-real"
+version = "0.1.0"
+description = "Calibrated multimodal sensor fusion for sim-to-real autonomous driving: CARLA + PyTorch"
+# torch==2.13.0 and the CARLA client wheel both stop at cp312 (no 3.13 build of
+# either yet), which sets the ceiling here.
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # --- PyTorch (the fusion backbone + the diffusion policy run on this) ---
+    # CUDA build from PyTorch's own cu126 index on the Linux GPU target (matches
+    # the Docker base image); default PyPI CPU/MPS build everywhere else, e.g.
+    # local macOS dev.
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    # --- CARLA Python client ---
+    # Talks over CARLA's RPC API to a separately-running CARLA *simulator*
+    # (its own container/binary, not built here). No macOS wheel is published
+    # for this version, so CARLA-dependent scripts only run on the Linux target.
+    "carla==0.9.16; sys_platform == 'linux'",
+    # --- Real-data half of the project: nuScenes / KITTI-style driving logs ---
+    "nuscenes-devkit>=1.2.0",
+    # --- Everyday utilities ---
+    "matplotlib",
+    "tqdm",
+    "tensorboard",
+]
+
+# Dev-only tooling. The Docker image builds with `uv sync --frozen --no-dev`, so
+# none of this lands in the GPU image.
+[dependency-groups]
+dev = [
+    "ruff==0.16.5",
+    "pre-commit==4.6.2",
+]
+
+[tool.uv]
+# The Linux/x86_64 GPU target (Docker/cloud, where CARLA + CUDA torch run) plus
+# macOS for local CPU/MPS dev (torch only — no CARLA wheel there).
+# No Windows — this project never runs there.
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin'",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+# Route torch/torchvision to PyTorch's own cu126 index only on Linux; macOS
+# resolves its CPU/MPS build from the default PyPI index as usual.
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = [".venv", "data", "notebooks"]
+
+[tool.ruff.lint]
+# Defaults (E4/E7/E9, F) plus import sorting, bugbear, pyupgrade, and comprehension
+# checks.
+extend-select = ["I", "B", "UP", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+# smoke_test.py imports framework-by-framework *on purpose*, so a failed import
+# names the framework that broke.
+"tests/smoke_test.py" = ["E402", "I001", "BLE001"]
+
+[tool.ruff.format]
+# Same rationale as the lint ignores above
+exclude = ["tests/smoke_test.py"]
