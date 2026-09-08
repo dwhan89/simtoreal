@@ -2,6 +2,7 @@ name: Build and push Docker image
 
 # Builds docker/Dockerfile on GitHub's runners and pushes to Docker Hub —
 # avoids uploading the multi-GB CUDA/torch image over a local connection.
+# One image per CUDA variant, so a RunPod host can be picked by driver support.
 on:
   push:
     branches: [main]
@@ -9,6 +10,7 @@ on:
       - "docker/Dockerfile"
       - "pyproject.toml"
       - "uv.lock"
+      - "uv-cu*.lock"
       - "tests/smoke_test.py"
       - ".github/workflows/docker-build-push.yml"
   workflow_dispatch: {}
@@ -16,6 +18,18 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: cuda13
+            base_image: nvidia/cuda:13.0.3-cudnn-devel-ubuntu22.04
+            lockfile: uv.lock
+            tags: dwhan89/simtoreal:cuda13,dwhan89/simtoreal:latest
+          - variant: cuda126
+            base_image: nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
+            lockfile: uv-cu126.lock
+            tags: dwhan89/simtoreal:cuda126
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +50,9 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: dwhan89/simtoreal:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ matrix.tags }}
+          build-args: |
+            BASE_IMAGE=${{ matrix.base_image }}
+            UV_LOCKFILE=${{ matrix.lockfile }}
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}

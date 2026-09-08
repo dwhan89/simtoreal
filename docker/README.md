@@ -21,6 +21,10 @@ box with no display.
   not this folder) and its resolved, pinned lockfile. `torch`/`torchvision`
   resolve from PyTorch's own cu130 index; everything else, `carla` included,
   resolves from PyPI.
+- `../uv-cu126.lock` — the same dependency set resolved against PyTorch's
+  cu126 index, for the CUDA 12.6 image variant. See "CUDA variants" below.
+- `../scripts/lock-cuda-variant.sh` — regenerates a secondary lockfile like
+  `uv-cu126.lock`.
 - `Dockerfile` — the client/training image for cloud GPU instances. Built
   from the **repo root** so it can see `pyproject.toml`/`uv.lock`.
 - `docker-compose.yml` — launches the CARLA simulator and this client image
@@ -61,7 +65,8 @@ the compose file does not apply here. Deploy the simulator and the client as
 
 1. Build and push the client image, from the **repo root**. Cloud GPU boxes
    are linux/amd64 — if building on Apple Silicon (arm64), pass
-   `--platform linux/amd64` explicitly.
+   `--platform linux/amd64` explicitly. (GitHub Actions does this for both
+   CUDA variants on push; see "CUDA variants" below.)
 
    ```bash
    docker buildx build --platform linux/amd64 \
@@ -96,6 +101,48 @@ the compose file does not apply here. Deploy the simulator and the client as
    ```bash
    python smoke_test.py
    ```
+
+## CUDA variants
+
+Two images are published, differing only in CUDA version, so you can pick a
+RunPod host by whichever driver it has:
+
+| Tag | CUDA base | Lockfile | torch |
+| --- | --- | --- | --- |
+| `simtoreal:cuda13`, `simtoreal:latest` | 13.0.3 | `uv.lock` | `2.13.0+cu130` |
+| `simtoreal:cuda126` | 12.6.3 | `uv-cu126.lock` | `2.13.0+cu126` |
+
+CUDA 13.0 is new enough that fewer hosts in RunPod's fleet support it; the
+cu126 image is the fallback when a pod's driver is too old. RunPod's
+**Additional Filters → CUDA Versions** narrows the host pool to matching
+drivers.
+
+GitHub Actions builds both on every push that touches the Dockerfile or a
+lockfile (`.github/workflows/docker-build-push.yml`), passing `BASE_IMAGE` and
+`UV_LOCKFILE` build args per variant. To build one locally:
+
+```bash
+docker buildx build --platform linux/amd64 -f docker/Dockerfile \
+  --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04 \
+  --build-arg UV_LOCKFILE=uv-cu126.lock \
+  -t <your-dockerhub-user>/simtoreal:cuda126 .
+```
+
+`BASE_IMAGE` and `UV_LOCKFILE` must always move together — a lockfile pins
+torch wheels built against one specific CUDA version.
+
+After bumping `torch`/`torchvision` in `pyproject.toml` (and running `uv lock`
+for the primary lockfile), regenerate the secondary one so both variants stay
+on the same versions:
+
+```bash
+./scripts/lock-cuda-variant.sh cu126
+```
+
+It resolves in a temp copy of the project, so `pyproject.toml` and `uv.lock`
+are never modified. Check that PyTorch actually publishes wheels for the CUDA
+version you want before adding a variant — `torch==2.13.0` has cu126 and
+cu130 builds but no cu128/cu124/cu123.
 
 ## Version note
 

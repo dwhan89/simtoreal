@@ -4,6 +4,9 @@ Notable changes to this project. Newest first.
 
 ## [Unreleased]
 
+- Published two CUDA variants of the client image (`:cuda13`, `:cuda126`) so a
+  cloud host can be picked by driver support, built as a matrix in CI.
+
 ## Stack: CARLA + PyTorch (current)
 
 - Swapped the all-JAX/MJX simulation stack for CARLA + PyTorch as the
