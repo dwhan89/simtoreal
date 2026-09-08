@@ -6,6 +6,10 @@ Notable changes to this project. Newest first.
 
 - Published two CUDA variants of the client image (`:cuda13`, `:cuda126`) so a
   cloud host can be picked by driver support, built as a matrix in CI.
+- Pinned the client image to CUDA 13.0 + torch 2.13.0/cu130 (was CUDA 12.6).
+- Rewrote the RunPod deployment docs around two separate pods (simulator +
+  client) connected over the network — RunPod pods have no Docker daemon, so
+  `docker-compose.yml` can't run there directly.
 
 ## Stack: CARLA + PyTorch (current)
 
