@@ -19,12 +19,14 @@ box with no display.
 
 - `../pyproject.toml` / `../uv.lock` — the dependency set (root of the repo,
   not this folder) and its resolved, pinned lockfile. `torch`/`torchvision`
-  resolve from PyTorch's own cu126 index; everything else, `carla` included,
+  resolve from PyTorch's own cu130 index; everything else, `carla` included,
   resolves from PyPI.
 - `Dockerfile` — the client/training image for cloud GPU instances. Built
   from the **repo root** so it can see `pyproject.toml`/`uv.lock`.
 - `docker-compose.yml` — launches the CARLA simulator and this client image
-  together for cloud deployment (see "Running on RunPod / Vast.ai" below).
+  together on one Docker network. Works on any host with its own Docker
+  daemon (e.g. local development). Does **not** work on RunPod as-is — see
+  "Running on RunPod" below for why and what to do instead.
 - `../tests/smoke_test.py` — run this first on every fresh instance to catch
   setup problems fast. It checks torch's CUDA device and that the `carla`
   and `nuscenes` packages import; it does not attempt to connect to a running
@@ -50,43 +52,50 @@ If a large batch
 still runs short of memory, the two options are the usual ones: shrink the batch, or
 watch for fragmentation with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`.
 
-## Running on RunPod / Vast.ai
+## Running on RunPod
+
+RunPod pods are **single containers, not VMs** — there's no Docker daemon
+inside a pod for `docker-compose.yml`'s nested `docker run` to talk to, so
+the compose file does not apply here. Deploy the simulator and the client as
+**two separate pods** instead, connected over the network:
 
 1. Build and push the client image, from the **repo root**. Cloud GPU boxes
    are linux/amd64 — if building on Apple Silicon (arm64), pass
    `--platform linux/amd64` explicitly.
+
    ```bash
    docker buildx build --platform linux/amd64 \
      -f docker/Dockerfile -t <your-dockerhub-user>/simtoreal:latest --push .
    ```
-2. Launch both containers with `docker/docker-compose.yml`, which wires
-   `carlasim/carla` (headless: `./CarlaUE4.sh -RenderOffScreen`) and this
-   client image on one network and points the client at the simulator's
-   host:port (2000 by default):
-   ```bash
-   docker compose -f docker/docker-compose.yml up
-   ```
-   Set `CLIENT_IMAGE` to the tag you pushed in step 1 if it's not
-   `simtoreal:latest`. Prefer to launch the two containers by hand instead?
-   Just make sure the client can reach the simulator's host:port (2000 by
-   default).
-3. Pick a GPU with enough headroom for both the simulator and torch training —
-   an RTX 4090 (24 GB) covers CARLA plus a modest fusion-model batch; split
-   across two GPUs if training gets memory-hungry (`CARLA_GPU`/`CLIENT_GPU` in
-   the compose file).
-4. The compose file attaches a **persistent volume** at `/workspace/data` (not
-   `/workspace` itself — that root holds the image's baked-in `.venv` and
-   code, which an empty volume would otherwise shadow on first mount) so
-   checkpoints and downloaded nuScenes/KITTI data survive a restart.
-5. SSH in and verify:
+
+2. **Simulator pod**: image `carlasim/carla:0.9.16`, container start command
+   `./CarlaUE4.sh -RenderOffScreen`. Expose TCP port 2000-2002 so the client
+   pod can reach it, and note the actual public host:port RunPod assigns
+   (its proxy may remap the port) from the pod's Connect tab.
+3. **Client pod**: image `<your-dockerhub-user>/simtoreal:latest`. Override
+   the container start command to `sleep infinity` — the image's default
+   `CMD` (`/bin/bash`) exits immediately without a TTY, which leaves nothing
+   for RunPod's SSH proxy to attach to. Attach a **persistent volume** at
+   `/workspace/data` (not `/workspace` itself — that root holds the image's
+   baked-in `.venv` and code, which an empty volume would otherwise shadow
+   on first mount) for checkpoints and downloaded nuScenes/KITTI data.
+4. Point the client at the simulator over the network — set
+   `CARLA_HOST`/`CARLA_PORT` to the simulator pod's address from step 2
+   (this replaces the compose file's internal `carla-sim` network alias,
+   which only exists when both containers share one Docker network).
+5. Pick GPUs and disk sizes with headroom for both the simulator and torch
+   training. The fusion backbone and diffusion policy aren't implemented
+   yet, so there's no measured batch size or memory footprint to size
+   against — size conservatively and revisit once real training code
+   exists. RunPod separates ephemeral **container disk** from persistent
+   **volume disk**; the volume only needs to hold whatever dataset subset
+   you're actually downloading plus checkpoints.
+6. SSH into the client pod (RunPod's Connect tab gives you the command) and
+   verify:
+
    ```bash
    python smoke_test.py
    ```
-
-*(No time to build an image? Start from any RunPod CUDA template, `pip install
-uv`, then `uv sync` — but a prebuilt image is faster to respin. In that case a
-persistent volume at plain `/workspace` is fine, since there's no baked venv
-to shadow.)*
 
 ## Version note
 

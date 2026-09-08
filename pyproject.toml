@@ -7,7 +7,7 @@ description = "Calibrated multimodal sensor fusion for sim-to-real autonomous dr
 requires-python = ">=3.10,<3.13"
 dependencies = [
     # --- PyTorch (the fusion backbone + the diffusion policy run on this) ---
-    # CUDA build from PyTorch's own cu126 index on the Linux GPU target (matches
+    # CUDA build from PyTorch's own cu130 index on the Linux GPU target (matches
     # the Docker base image); default PyPI CPU/MPS build everywhere else, e.g.
     # local macOS dev.
     "torch==2.13.0",
@@ -43,15 +43,15 @@ environments = [
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
-# Route torch/torchvision to PyTorch's own cu126 index only on Linux; macOS
+# Route torch/torchvision to PyTorch's own cu130 index only on Linux; macOS
 # resolves its CPU/MPS build from the default PyPI index as usual.
-torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux'" }]
 
 [tool.ruff]
 line-length = 88

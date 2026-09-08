@@ -1,5 +1,7 @@
-# Cloud deployment: CARLA simulator + this repo's client/training image on one
-# network. Run from the repo root:
+# CARLA simulator + this repo's client/training image on one network. Needs a
+# host with its own Docker daemon (does not work on RunPod's per-pod-is-a-
+# container model — see docker/README.md "Running on RunPod" for that path).
+# Run from the repo root:
 #
 #   docker compose -f docker/docker-compose.yml up
 #
@@ -23,7 +25,7 @@ services:
               capabilities: [gpu]
 
   client:
-    image: dwhan89/simtoreal:latest
+    image: ${CLIENT_IMAGE:-dwhan89/simtoreal:latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile
